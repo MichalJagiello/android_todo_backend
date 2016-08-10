@@ -1,11 +1,16 @@
-from flask import abort, request
-from flask_restful import Resource
+from flask import abort, jsonify, request
+from flask_restful import Resource, reqparse
 
 import logging
 
 from datetime import datetime
 
+from mongoengine.errors import ValidationError
+
 from models import Event as EventModel
+from models import User as UserModel
+
+from decorators import requires_login, requires_token
 
 class Event(Resource):
     def get(self, event_id):
@@ -56,3 +61,31 @@ class Events(Resource):
         e.save()
         
         return e.to_json()
+
+
+class User(Resource):
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('email', type=str, location='json', required=True)
+        self.reqparse.add_argument('password', type=str, location='json', required=True)
+        super(User, self).__init__()
+
+    def post(self):
+        args = self.reqparse.parse_args()
+        email = args.get('email')
+        password = args.get('password')
+        if UserModel.get(email) is not None:
+            abort(400, 'User with given mail exists')
+        user = UserModel(email = email)
+        user.hash_password(password)
+        try:
+            user.save()
+        except ValidationError as err:
+            logging.info(err.errors)
+            abort(400, str(err.errors))
+        return jsonify({'email': user.email})
+
+    @requires_login
+    def get(self):
+        logging.info(request.user.email)

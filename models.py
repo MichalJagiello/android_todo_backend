@@ -1,28 +1,34 @@
 
 from mongoengine import (connect,
-                         Document)
+                         Document,
+                         EmbeddedDocument)
 
 from mongoengine.fields import (DateTimeField,
                                 IntField,
-                                StringField)
+                                StringField,
+                                BooleanField,
+                                EmailField,
+                                EmbeddedDocumentListField,)
 
-connect('aplikacje_wielowarstwowe')
+from passlib.apps import custom_app_context
+
+connect('heroku_wldq7xdd', host="mongodb://app_wielo:app_wielo@ds055855.mongolab.com:55855/heroku_wldq7xdd")
 
 
-class Event(Document):
+class Event(EmbeddedDocument):
     """
     The Event model
     """
     title = StringField(required=True)
     time = DateTimeField(required=True)
-    description = StringField()
+    all_day_event = BooleanField(required=False, default=True)
     
     @classmethod
-    def create(cls, title, time, description=None):
+    def create(cls, title, time, all_day_event=True):
         """
         Create an event
         """
-        e = Event(title, time, description)
+        e = Event(title, time, all_day_event)
         e.save()
         return e
 
@@ -40,3 +46,23 @@ class Event(Document):
         Get the event
         """
         return Event.objects(id=object_id).first()
+
+
+class User(Document):
+    """
+    User document
+    """
+    email = EmailField(required=True)
+    password = StringField(required=True)
+    events = EmbeddedDocumentListField(Event)
+
+    def hash_password(self, password):
+        self.password = custom_app_context.encrypt(password)
+
+    def verify_password(self, password):
+        return custom_app_context.verify(password, self.password)
+
+
+    @classmethod
+    def get(cls, email):
+        return User.objects(email=email).first()
